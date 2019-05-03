@@ -214,16 +214,19 @@ static void save_err_ptr_str( const void *ptr )
 
 void *dlopen( const char *file, int mode )
 {
-    HMODULE hModule;
-    UINT uMode;
+    HMODULE hModule=NULL;
+    UINT uMode=0;
 
     current_error = NULL;
 
+#ifndef ENABLE_WINRT
     /* Do not let Windows display the critical-error-handler message box */
     uMode = SetErrorMode( SEM_FAILCRITICALERRORS );
+#endif
 
     if( file == 0 )
     {
+#ifndef ENABLE_WINRT
         HMODULE hAddtnlMods[1024]; // Already loaded modules
         HANDLE hCurrentProc = GetCurrentProcess( );
         DWORD cbNeeded;
@@ -258,6 +261,7 @@ void *dlopen( const char *file, int mode )
             }
         }
         auto_ref_count++;
+#endif
     }
     else
     {
@@ -281,8 +285,13 @@ void *dlopen( const char *file, int mode )
          * to UNIX's search paths (start with system folders instead of current
          * folder).
          */
+#if ENABLE_WINRT
+		hModule = LoadPackagedLibrary(lpFileName, 0);
+#else
         hModule = LoadLibraryEx(lpFileName, NULL, 
                                 LOAD_WITH_ALTERED_SEARCH_PATH );
+#endif
+		
 
         /* If the object was loaded with RTLD_GLOBAL, add it to list of global
          * objects, so that its symbols may be retrieved even if the handle for
@@ -332,6 +341,7 @@ int dlclose( void *handle )
      */
     if( ret )
     {
+#ifndef ENABLE_WINRT
         HMODULE cur = GetModuleHandle( NULL );
         global_rem( &first_object, hModule );
         if( hModule == cur )
@@ -342,6 +352,7 @@ int dlclose( void *handle )
             if( !auto_ref_count )
                 free_auto( );
         }
+#endif
     }
     else
         save_err_ptr_str( handle );
@@ -368,6 +379,8 @@ void *dlsym( void *handle, const char *name )
 
     if( symbol != NULL )
         goto end;
+
+#ifndef ENABLE_WINRT
 
     /* If the handle for the original program file is passed, also search
      * in all globally loaded objects.
@@ -399,6 +412,7 @@ void *dlsym( void *handle, const char *name )
             }
         }
     }
+#endif
 
 end:
     if( symbol == NULL )
